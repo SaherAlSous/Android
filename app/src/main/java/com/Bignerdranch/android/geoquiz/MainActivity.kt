@@ -2,15 +2,21 @@ package com.Bignerdranch.android.geoquiz
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.PersistableBundle
 import android.util.Log
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelProviders
 import com.google.android.material.snackbar.Snackbar
 
 //logging app life cycles
 private const val TAG = "MainActivity" //no spaces better for filter in logcat
+private const val KEY_INDEX = "index" //creating a key index to pair it with currentindex
+                                     // for onSaveInstanceState (bundle?) to save data once
+                                    // app is killed.
 
 class MainActivity : AppCompatActivity() {
 
@@ -21,24 +27,35 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prevButton : ImageButton
     private lateinit var answersMap : MutableMap<Int, Boolean>
 
-    private val questionBank = listOf( //We added objects of data class constructor
-                                        // linked with the questions in R.String with answer.
-        Question(R.string.question_australia,true),
-        Question(R.string.question_africa,false),
-        Question(R.string.question_oceans,true),
-        Question(R.string.question_mideast, false),
-        Question(R.string.question_americas, true),
-        Question(R.string.question_asia, true)
-    )
+    /*linking viewmodel class to main activity
+             ViewModelProvider acts like a registry of VIewModel, once called
+              it creates and returns a new instance of quizViewModel, when the activity
+              queries for the QuizViewModel after configuration change, it returns the instance
+              it created first.
 
-    //creating an index to be used for questions in list
-    private var currentIndex = 0
+          val provider : ViewModelProvider = ViewModelProviders.of(this)
+          val quizViewModel = provider.get(QuizViewModel::class.java)
+          Log.d(TAG, "Got a QuizViewModel: $quizViewModel")
+          ***BELOW***
+           */
+    private val quizViewModel : QuizViewModel by lazy {
+        ViewModelProviders.of(this).get(QuizViewModel::class.java)
+    }
+
+// this is forbidden, since it initialize the ViewModel before onCreate, and crash the app.
+//    val currentIndex = quizViewModel.currentIndex
+//    val questionBank = quizViewModel.questionBank
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "onCreate(Bundle?) called")
         setContentView(R.layout.activity_main)
+        //checking for saved data and getting them if not null
+        val currentIndex = savedInstanceState?.getInt(KEY_INDEX, 0) ?: 0
+        quizViewModel.currentIndex = currentIndex
+
+
 
         trueButton = findViewById(R.id.true_button)
         falseButton = findViewById(R.id.false_button)
@@ -49,20 +66,12 @@ class MainActivity : AppCompatActivity() {
         updateQuestion()
 
         questionTextView.setOnClickListener{
-            currentIndex = (currentIndex + 1) % questionBank.size
+            quizViewModel.moveToNext()
             updateQuestion()
         }
 
         trueButton.setOnClickListener {
-
             checkAnswer(true)
-//            Snackbar.make(it, R.string.correct_toast, Snackbar.LENGTH_LONG)
-//                .setAction("Show Toast") {
-//                    val toastTrue = Toast.makeText(this, R.string.correct_toast, Toast.LENGTH_SHORT)
-//                    toastTrue.setGravity(Gravity.TOP,0,0)
-//                    toastTrue.show()
-//                }
-//                .show()
             }
 
         falseButton.setOnClickListener {
@@ -70,44 +79,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         prevButton.setOnClickListener {
-            if (::answersMap.isInitialized && answersMap.size == questionBank.size){
+            if (::answersMap.isInitialized && answersMap.size == quizViewModel.questionBank.size){
                 val score = answersMap.count { it.value == true }
-                val snackbar : Snackbar = Snackbar.make(it, "Your score is $score of ${questionBank.size}", Snackbar.LENGTH_INDEFINITE)
+                val snackbar : Snackbar = Snackbar.make(it, "Your score is $score of ${quizViewModel.questionBank.size}", Snackbar.LENGTH_INDEFINITE)
                     .setAction("Reset?"){
-                        currentIndex =0
+                        quizViewModel.currentIndex =0
                         updateQuestion()
                         answersMap.clear()
                     }
-                    snackbar.show()
+                snackbar.show()
             }else {
-                if (currentIndex >= 1) {
-                    currentIndex = (currentIndex - 1) % questionBank.size
-                    updateQuestion()
-                } else {
-                    currentIndex = questionBank.size - 1
+                quizViewModel.moveToPrev()
                     updateQuestion()
                 }
             }
-        }
 
         nextButton.setOnClickListener {
-            if (::answersMap.isInitialized && answersMap.size == questionBank.size){
+            if (::answersMap.isInitialized && answersMap.size == quizViewModel.questionBank.size){
                 val score = answersMap.count { it.value == true }
-                val snackbar : Snackbar = Snackbar.make(it, "Your score is $score of ${questionBank.size}", Snackbar.LENGTH_INDEFINITE)
+                val snackbar : Snackbar = Snackbar.make(it, "Your score is $score of ${quizViewModel.questionBank.size}", Snackbar.LENGTH_INDEFINITE)
                     .setAction("Reset?"){
-                        currentIndex =0
+                        quizViewModel.currentIndex =0
                         answersMap.clear()
                         updateQuestion()
                     }
                 snackbar.show()
             }else {
-                currentIndex = (currentIndex + 1) % questionBank.size
+                quizViewModel.moveToNext()
                 updateQuestion()
             }
         }
-
-
-
     }
 
     override fun onStart() {
@@ -125,6 +126,12 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "OnPause(Bundle?) called")
     }
 
+    override fun onSaveInstanceState(savedInstanceState: Bundle) {
+        super.onSaveInstanceState(savedInstanceState)
+        savedInstanceState.putInt(KEY_INDEX, quizViewModel.currentIndex) //<-- saving currentindex
+        Log.d(TAG, "OnSave(BUndle?) Called")
+    }
+
     override fun onStop() {
         super.onStop()
         Log.d(TAG, "OnStop(BUndle?) Called")
@@ -134,15 +141,39 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Log.d(TAG, "OnDestroyed(Bundle?) called")
     }
+
+    private fun checkAnswer(userAnswer : Boolean){
+        val correctAnswer = quizViewModel.questionBank[quizViewModel.currentIndex].answer
+        val messageResId = if (userAnswer == correctAnswer){
+            if (::answersMap.isInitialized){
+                answersMap.put(quizViewModel.currentIndex,true)
+            }else{
+                answersMap = mutableMapOf(quizViewModel.currentIndex to true)
+            }
+            R.string.correct_toast
+
+        } else {
+            if (::answersMap.isInitialized){
+                answersMap.put(quizViewModel.currentIndex,false)
+            }else{
+                answersMap = mutableMapOf(quizViewModel.currentIndex to false)
+            }
+            R.string.false_toast
+        }
+        Toast.makeText(this,messageResId ,Toast.LENGTH_SHORT).show()
+
+        //create a mutableMap to save the answers with their K: index & V: UserAnswer
+
+    }
     private fun updateQuestion() {
         //We create a value that access and save the text in
         // the String file using the Question class template.
-        val questionTextResId = questionBank[currentIndex].textResId
+        val questionTextResId = quizViewModel.questionBank[quizViewModel.currentIndex].textResId
 
         //updating the text view field with the next question text from string.
         questionTextView.setText(questionTextResId)
         if (::answersMap.isInitialized) {
-            if (answersMap.containsKey(key = currentIndex)) {
+            if (answersMap.containsKey(key = quizViewModel.currentIndex)) {
                 trueButton.isClickable = false
                 falseButton.isClickable = false
                 Toast.makeText(
@@ -155,28 +186,5 @@ class MainActivity : AppCompatActivity() {
                 falseButton.isClickable = true
             }
         }
-    }
-    private fun checkAnswer(userAnswer : Boolean){
-        val correctAnswer = questionBank[currentIndex].answer
-        val messageResId = if (userAnswer == correctAnswer){
-            if (::answersMap.isInitialized){
-                answersMap.put(currentIndex,true)
-            }else{
-                answersMap = mutableMapOf(currentIndex to true)
-            }
-            R.string.correct_toast
-
-        } else {
-            if (::answersMap.isInitialized){
-                answersMap.put(currentIndex,false)
-            }else{
-                answersMap = mutableMapOf(currentIndex to false)
-            }
-            R.string.false_toast
-        }
-        Toast.makeText(this,messageResId ,Toast.LENGTH_SHORT).show()
-
-        //create a mutableMap to save the answers with their K: index & V: UserAnswer
-
     }
 }
