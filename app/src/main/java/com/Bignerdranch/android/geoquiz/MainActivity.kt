@@ -18,6 +18,9 @@ private const val KEY_INDEX = "index" //creating a key index to pair it with cur
                                      // for onSaveInstanceState (bundle?) to save data once
                                     // app is killed.
 
+private const val KEYS = "key"
+private const val VALUE = "value"
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var trueButton: Button
@@ -54,8 +57,11 @@ class MainActivity : AppCompatActivity() {
         //checking for saved data and getting them if not null
         val currentIndex = savedInstanceState?.getInt(KEY_INDEX, 0) ?: 0
         quizViewModel.currentIndex = currentIndex
-
-
+        val keysArray = savedInstanceState?.getIntArray(KEYS) ?: IntArray(0)
+        val valuesArray = savedInstanceState?.getBooleanArray(VALUE) ?: BooleanArray(0)
+        answersMap = mutableMapOf<Int, Boolean>().apply {
+            for (i in keysArray.indices) this [keysArray[i]] = valuesArray[i]
+        }
 
         trueButton = findViewById(R.id.true_button)
         falseButton = findViewById(R.id.false_button)
@@ -130,6 +136,12 @@ class MainActivity : AppCompatActivity() {
         super.onSaveInstanceState(savedInstanceState)
         savedInstanceState.putInt(KEY_INDEX, quizViewModel.currentIndex) //<-- saving currentindex
         Log.d(TAG, "OnSave(BUndle?) Called")
+        if (::answersMap.isInitialized){
+            val keys = (answersMap.keys).toIntArray()
+            val values = (answersMap.values).toBooleanArray()
+            savedInstanceState.putIntArray(KEYS, keys)
+            savedInstanceState.putBooleanArray(VALUE, values)
+        }
     }
 
     override fun onStop() {
@@ -188,3 +200,4 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
