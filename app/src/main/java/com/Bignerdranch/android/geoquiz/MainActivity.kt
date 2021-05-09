@@ -1,5 +1,7 @@
 package com.Bignerdranch.android.geoquiz
 
+import android.app.Activity
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.PersistableBundle
@@ -21,6 +23,8 @@ private const val KEY_INDEX = "index" //creating a key index to pair it with cur
 private const val KEYS = "key"
 private const val VALUE = "value"
 
+private const val REQUEST_CODE_CHEAT = 0
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var trueButton: Button
@@ -29,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var questionTextView: TextView
     private lateinit var prevButton : ImageButton
     private lateinit var answersMap : MutableMap<Int, Boolean>
+    private lateinit var cheat_button : Button
 
     /*linking viewmodel class to main activity
              ViewModelProvider acts like a registry of VIewModel, once called
@@ -68,6 +73,7 @@ class MainActivity : AppCompatActivity() {
         nextButton = findViewById(R.id.next_button)
         questionTextView = findViewById(R.id.question_text_view)
         prevButton = findViewById(R.id.prev_button)
+        cheat_button = findViewById(R.id.cheat_button)
 
         updateQuestion()
 
@@ -83,6 +89,27 @@ class MainActivity : AppCompatActivity() {
         falseButton.setOnClickListener {
            checkAnswer(false)
         }
+
+        cheat_button.setOnClickListener {
+            //creating an explicit intent to ask OS:ActivityManager to start
+            // CheatActivity to start (implicit intents between apps)
+
+            //val intent = Intent(this, CheatActivity::class.java) <-- classic way, we need a secure way to pass extras
+
+            //once the button is pressed, the startactivity will pass the intent
+            // details to the OS:ActivityManager
+
+            val answerIsTrue = quizViewModel.currentQuestionAnswer //this is the getter from the
+            // class that get the answer based on the index.
+
+            val intent = CheatActivity.newIntent(this@MainActivity, answerIsTrue) //<-- you can add more
+            // extras that will be used by the function (newIntent) within the companion object.
+            // you can pass as much extra as you want by adding more arguments in function constructor.
+
+            //startActivity(intent) <-- THIS FUNCTION WHEN WE WANT TO START/SEND DATA ONLY, TO RECIEVE REPORT WE USE BELOW
+            startActivityForResult(intent, REQUEST_CODE_CHEAT) //<-- we are requesting an integer back.
+        }
+
 
         prevButton.setOnClickListener {
             if (::answersMap.isInitialized && answersMap.size == quizViewModel.questionBank.size){
@@ -144,6 +171,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /*
+    Overriding the onActivityResult function, to get the result from the intent and
+    store it in view model (QuizViewModel.isCheater)
+     */
+
+    override fun onActivityResult(requestCode: Int,
+                                  resultCode: Int,
+                                  data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+       //if result is not okey, then button wasn't pressed, don't continue the fun.
+        if (resultCode != Activity.RESULT_OK){
+            return
+        }
+        //if result is okey, check the data code if it is the cheat code, if so ( =0) get the
+        // result from the intent result and store it in quizViewModel
+        if (requestCode == REQUEST_CODE_CHEAT){
+            quizViewModel.isCheater =
+                data?.getBooleanExtra(EXTRA_ANSWER_IS_SHOWN, false) ?: false
+        }
+    }
+
     override fun onStop() {
         super.onStop()
         Log.d(TAG, "OnStop(BUndle?) Called")
@@ -154,29 +202,32 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "OnDestroyed(Bundle?) called")
     }
 
-    private fun checkAnswer(userAnswer : Boolean){
+    private fun checkAnswer(userAnswer : Boolean) {
         val correctAnswer = quizViewModel.questionBank[quizViewModel.currentIndex].answer
-        val messageResId = if (userAnswer == correctAnswer){
-            if (::answersMap.isInitialized){
-                answersMap.put(quizViewModel.currentIndex,true)
-            }else{
-                answersMap = mutableMapOf(quizViewModel.currentIndex to true)
-            }
-            R.string.correct_toast
+        val messageResId = if (quizViewModel.isCheater) {
+            R.string.judgment_toast
+        } else if (userAnswer == correctAnswer) {
 
-        } else {
-            if (::answersMap.isInitialized){
-                answersMap.put(quizViewModel.currentIndex,false)
-            }else{
-                answersMap = mutableMapOf(quizViewModel.currentIndex to false)
+                if (::answersMap.isInitialized) {
+                    answersMap.put(quizViewModel.currentIndex, true)
+                } else {
+                    answersMap = mutableMapOf(quizViewModel.currentIndex to true)
+                }
+                R.string.correct_toast
+
+            } else {
+                if (::answersMap.isInitialized) {
+                    answersMap.put(quizViewModel.currentIndex, false)
+                } else {
+                    answersMap = mutableMapOf(quizViewModel.currentIndex to false)
+                }
+                R.string.false_toast
             }
-            R.string.false_toast
+
+            Toast.makeText(this, messageResId, Toast.LENGTH_SHORT).show()
+            //create a mutableMap to save the answers with their K: index & V: UserAnswer
         }
-        Toast.makeText(this,messageResId ,Toast.LENGTH_SHORT).show()
 
-        //create a mutableMap to save the answers with their K: index & V: UserAnswer
-
-    }
     private fun updateQuestion() {
         //We create a value that access and save the text in
         // the String file using the Question class template.
@@ -200,4 +251,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-

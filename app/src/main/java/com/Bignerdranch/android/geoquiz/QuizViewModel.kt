@@ -18,6 +18,8 @@ class QuizViewModel: ViewModel() {
 
     //creating an index to be used for questions in list
     var currentIndex = 0
+    //saving the cheat status so it wont be lost on configuration change
+    var isCheater = false
 
     //adding the values of current question and functions of next & prev.
     val currentQuestionAnswer : Boolean
@@ -36,7 +38,4 @@ class QuizViewModel: ViewModel() {
             currentIndex -= 1
         }
     }
-
-
-
 }
