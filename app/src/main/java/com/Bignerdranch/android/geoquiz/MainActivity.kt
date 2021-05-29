@@ -1,11 +1,14 @@
 package com.Bignerdranch.android.geoquiz
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.content.Intent
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.PersistableBundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.TextView
@@ -22,6 +25,9 @@ private const val KEY_INDEX = "index" //creating a key index to pair it with cur
 
 private const val KEYS = "key"
 private const val VALUE = "value"
+
+//questions they cheated on
+var cheatedList = mutableListOf<Int>()
 
 private const val REQUEST_CODE_CHEAT = 0
 
@@ -47,8 +53,10 @@ class MainActivity : AppCompatActivity() {
           ***BELOW***
            */
     private val quizViewModel : QuizViewModel by lazy {
-        ViewModelProviders.of(this).get(QuizViewModel::class.java)
+        ViewModelProvider(this).get(QuizViewModel::class.java)
     }
+
+
 
 // this is forbidden, since it initialize the ViewModel before onCreate, and crash the app.
 //    val currentIndex = quizViewModel.currentIndex
@@ -102,12 +110,23 @@ class MainActivity : AppCompatActivity() {
             val answerIsTrue = quizViewModel.currentQuestionAnswer //this is the getter from the
             // class that get the answer based on the index.
 
-            val intent = CheatActivity.newIntent(this@MainActivity, answerIsTrue) //<-- you can add more
+            val intent = CheatActivity.newIntent(this@MainActivity, answerIsTrue,quizViewModel.currentIndex) //<-- you can add more
             // extras that will be used by the function (newIntent) within the companion object.
             // you can pass as much extra as you want by adding more arguments in function constructor.
 
-            //startActivity(intent) <-- THIS FUNCTION WHEN WE WANT TO START/SEND DATA ONLY, TO RECIEVE REPORT WE USE BELOW
-            startActivityForResult(intent, REQUEST_CODE_CHEAT) //<-- we are requesting an integer back.
+
+            //creating an OS compatibility check before running a code for OS higher than our minimum SDK
+             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                 val option = ActivityOptions
+                     .makeClipRevealAnimation(it,0,0,it.width,it.height)
+                 startActivityForResult(intent, REQUEST_CODE_CHEAT,option.toBundle())
+             }else {
+                 //startActivity(intent) <-- THIS FUNCTION WHEN WE WANT TO START/SEND DATA ONLY, TO RECIEVE REPORT WE USE BELOW
+                 startActivityForResult(
+                     intent,
+                     REQUEST_CODE_CHEAT
+                 ) //<-- we are requesting an integer back.
+             }
         }
 
 
@@ -194,7 +213,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        Log.d(TAG, "OnStop(BUndle?) Called")
+        Log.d(TAG, "OnStop(Bundle?) Called")
     }
 
     override fun onDestroy() {
@@ -204,7 +223,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkAnswer(userAnswer : Boolean) {
         val correctAnswer = quizViewModel.questionBank[quizViewModel.currentIndex].answer
-        val messageResId = if (quizViewModel.isCheater) {
+        val messageResId = if (cheatedList.contains(quizViewModel.currentIndex)) {
             R.string.judgment_toast
         } else if (userAnswer == correctAnswer) {
 
